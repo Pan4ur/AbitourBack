@@ -1,5 +1,5 @@
 ﻿(function () {
-  const apiBase = "http://localhost:8080/api/v1";
+  const apiBase = `${window.location.origin}/api/v1`;
   let token = localStorage.getItem("teacher.token") || "";
   let selectedParticipantId = null;
   let selectedParticipantQuestId = null;
