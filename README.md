@@ -1,7 +1,7 @@
 ## установка
 
 ```bash
-sudo bash <(curl -fsSL https://raw.githubusercontent.com/Pan4ur/AbitourBack/main/deploy/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/Pan4ur/AbitourBack/main/deploy/install.sh)
 ```
 
 ## проверка
@@ -13,8 +13,8 @@ journalctl -u abitour-server -f
 ## удаление
 
 ```bash
-sudo bash <(curl -fsSL https://raw.githubusercontent.com/Pan4ur/AbitourBack/main/deploy/uninstall.sh) --yes
-sudo bash <(curl -fsSL https://raw.githubusercontent.com/Pan4ur/AbitourBack/main/deploy/uninstall.sh) --yes --keep-data
+bash <(curl -fsSL https://raw.githubusercontent.com/Pan4ur/AbitourBack/main/deploy/uninstall.sh) --yes
+bash <(curl -fsSL https://raw.githubusercontent.com/Pan4ur/AbitourBack/main/deploy/uninstall.sh) --yes --keep-data
 ```
 
 ## переменные окружения
