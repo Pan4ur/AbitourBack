@@ -10,14 +10,14 @@ DATA_DIR="/var/lib/${APP_NAME}"
 ENV_FILE="${CONFIG_DIR}/${APP_NAME}.env"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 REPO_SLUG="${ABITOUR_REPO:-Pan4ur/AbitourBack}"
-REPO_REF="${ABITOUR_REF:-main}"
+RELEASE_TAG="${ABITOUR_RELEASE_TAG:-latest}"
+ASSET_NAME="abitour-server.jar"
+JAVA_DIR="${INSTALL_DIR}/java"
+JAVA_BIN="java"
 DEFAULT_PORT="8080"
 DEFAULT_DB_JDBC_URL="jdbc:sqlite:${DATA_DIR}/abitour.db"
 DEFAULT_DB_MAX_POOL_SIZE="10"
 DEFAULT_UPLOADS_DIR="${DATA_DIR}/uploads"
-JAVA_DIR="${INSTALL_DIR}/java"
-JAVA_HOME_DIR=""
-JAVA_BIN="java"
 
 ABITOUR_PORT_VALUE=""
 ABITOUR_JWT_SECRET_VALUE=""
@@ -89,21 +89,21 @@ resolve_default() {
 install_packages() {
     if command_exists apt-get; then
         run_root apt-get update
-        run_root apt-get install -y ca-certificates curl tar unzip
+        run_root apt-get install -y ca-certificates curl tar
         return
     fi
 
     if command_exists dnf; then
-        run_root dnf install -y ca-certificates curl tar unzip
+        run_root dnf install -y ca-certificates curl tar
         return
     fi
 
     if command_exists yum; then
-        run_root yum install -y ca-certificates curl tar unzip
+        run_root yum install -y ca-certificates curl tar
         return
     fi
 
-    fail "неподдерживаемый пакетный менеджер. Установите curl, tar, unzip и Java 21 вручную."
+    fail "Неподдерживаемый пакетный менеджер. Установите curl, tar и Java 21 вручную."
 }
 
 java_is_21() {
@@ -120,6 +120,8 @@ java_is_21() {
 install_java21_from_packages() {
     if command_exists apt-get; then
         local packages=(
+            openjdk-21-jre-headless
+            openjdk-21-jre
             openjdk-21-jdk-headless
             openjdk-21-jdk
             msopenjdk-21
@@ -134,12 +136,12 @@ install_java21_from_packages() {
     fi
 
     if command_exists dnf; then
-        run_root dnf install -y java-21-openjdk-devel || run_root dnf install -y java-21-openjdk-headless
+        run_root dnf install -y java-21-openjdk-headless || run_root dnf install -y java-21-openjdk-devel
         return
     fi
 
     if command_exists yum; then
-        run_root yum install -y java-21-openjdk-devel || run_root yum install -y java-21-openjdk-headless
+        run_root yum install -y java-21-openjdk-headless || run_root yum install -y java-21-openjdk-devel
         return
     fi
 
@@ -147,7 +149,7 @@ install_java21_from_packages() {
 }
 
 install_java21_from_adoptium() {
-    local archive_url="https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse"
+    local archive_url="https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jre/hotspot/normal/eclipse"
 
     log "Java 21 не найдена в репозиториях, скачиваю Temurin 21"
     curl -fsSL "${archive_url}" -o "${TMP_DIR}/java21.tar.gz"
@@ -159,26 +161,23 @@ install_java21_from_adoptium() {
 ensure_java21() {
     if command_exists java && java_is_21 "$(command -v java)"; then
         JAVA_BIN="$(command -v java)"
-        JAVA_HOME_DIR="$(cd "$(dirname "${JAVA_BIN}")/.." && pwd)"
-        log "использую системную Java 21: ${JAVA_BIN}"
+        log "Использую системную Java 21: ${JAVA_BIN}"
         return
     fi
 
     if install_java21_from_packages; then
         if command_exists java && java_is_21 "$(command -v java)"; then
             JAVA_BIN="$(command -v java)"
-            JAVA_HOME_DIR="$(cd "$(dirname "${JAVA_BIN}")/.." && pwd)"
-            log "установлена Java 21 из пакетов: ${JAVA_BIN}"
+            log "Установлена Java 21 из пакетов: ${JAVA_BIN}"
             return
         fi
     fi
 
     install_java21_from_adoptium
-    JAVA_HOME_DIR="${JAVA_DIR}"
-    JAVA_BIN="${JAVA_HOME_DIR}/bin/java"
+    JAVA_BIN="${JAVA_DIR}/bin/java"
 
     if ! java_is_21 "${JAVA_BIN}"; then
-        fail "не удалось подготовить Java 21"
+        fail "Не удалось подготовить Java 21"
     fi
 }
 
@@ -187,13 +186,13 @@ ensure_user() {
         return
     fi
 
-    log "создаю системного пользователя ${APP_USER}"
+    log "Создаю системного пользователя ${APP_USER}"
     run_root useradd \
         --system \
         --home-dir "${INSTALL_DIR}" \
         --shell /usr/sbin/nologin \
         --user-group \
-        --comment "Сервис backend Abitour" \
+        --comment "Abitour backend service" \
         "${APP_USER}"
 }
 
@@ -287,7 +286,7 @@ prompt_port() {
 }
 
 prompt_configuration() {
-    log "запрашиваю конфигурацию"
+    log "Запрашиваю конфигурацию"
 
     ABITOUR_PORT_VALUE="$(prompt_port "Порт приложения" "$(resolve_default "ABITOUR_PORT" "${DEFAULT_PORT}")")"
     ABITOUR_JWT_SECRET_VALUE="$(prompt_secret "JWT-секрет" "$(resolve_default "ABITOUR_JWT_SECRET" "")")"
@@ -299,7 +298,7 @@ prompt_configuration() {
 }
 
 prepare_directories() {
-    log "подготавливаю директории"
+    log "Подготавливаю директории"
     run_root mkdir -p "${INSTALL_DIR}" "${CONFIG_DIR}" "${DATA_DIR}"
     run_root chown -R "${APP_USER}:${APP_GROUP}" "${INSTALL_DIR}" "${DATA_DIR}"
     run_root chmod 755 "${INSTALL_DIR}" "${DATA_DIR}"
@@ -321,44 +320,23 @@ prepare_directories() {
     run_root chmod 755 "${ABITOUR_UPLOADS_DIR_VALUE}"
 }
 
-download_source() {
-    local archive_url="https://codeload.github.com/${REPO_SLUG}/tar.gz/refs/heads/${REPO_REF}"
-    log "скачиваю исходники ${REPO_SLUG}@${REPO_REF}"
-    curl -fsSL "${archive_url}" -o "${TMP_DIR}/source.tar.gz"
-    tar -xzf "${TMP_DIR}/source.tar.gz" -C "${TMP_DIR}"
+download_release_asset() {
+    local download_url="https://github.com/${REPO_SLUG}/releases/download/${RELEASE_TAG}/${ASSET_NAME}"
 
-    SOURCE_DIR="$(find "${TMP_DIR}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-    [[ -n "${SOURCE_DIR}" ]] || fail "failed to extract repository archive"
-}
-
-build_application() {
-    local jar_path
-
-    log "собираю приложение"
-    pushd "${SOURCE_DIR}" >/dev/null
-    export GRADLE_USER_HOME="${TMP_DIR}/gradle-home"
-    export JAVA_HOME="${JAVA_HOME_DIR}"
-    export PATH="${JAVA_HOME}/bin:${PATH}"
-    chmod +x ./gradlew
-    if ! ./gradlew --no-daemon clean buildFatJar --console=plain; then
-        log "задача buildFatJar недоступна, перехожу на обычную сборку"
-        ./gradlew --no-daemon clean build --console=plain
+    log "Скачиваю ${ASSET_NAME} из релиза ${RELEASE_TAG}"
+    if ! curl -fsSL "${download_url}" -o "${TMP_DIR}/${ASSET_NAME}"; then
+        fail "Не удалось скачать ${ASSET_NAME} из https://github.com/${REPO_SLUG}/releases. Убедитесь, что GitHub Actions уже опубликовал релиз."
     fi
-    jar_path="$(find build/libs -maxdepth 1 -type f -name '*-all.jar' | head -n 1)"
-    popd >/dev/null
-
-    [[ -n "${jar_path}" ]] || fail "fat jar не найден после сборки"
-    cp "${SOURCE_DIR}/${jar_path}" "${TMP_DIR}/${APP_NAME}.jar"
 }
 
 install_application() {
-    log "устанавливаю файлы приложения"
-    run_root install -m 0644 "${TMP_DIR}/${APP_NAME}.jar" "${INSTALL_DIR}/${APP_NAME}.jar"
+    log "Устанавливаю файлы приложения"
+    run_root install -m 0644 "${TMP_DIR}/${ASSET_NAME}" "${INSTALL_DIR}/${APP_NAME}.jar"
     run_root chown "${APP_USER}:${APP_GROUP}" "${INSTALL_DIR}/${APP_NAME}.jar"
 }
 
 ensure_env_file() {
-    log "записываю env-файл"
+    log "Записываю env-файл"
     {
         printf 'ABITOUR_PORT=%q\n' "${ABITOUR_PORT_VALUE}"
         printf 'ABITOUR_JWT_SECRET=%q\n' "${ABITOUR_JWT_SECRET_VALUE}"
@@ -373,10 +351,10 @@ ensure_env_file() {
 }
 
 write_service_file() {
-    log "создаю systemd unit"
+    log "Создаю systemd unit"
     cat > "${TMP_DIR}/${APP_NAME}.service" <<EOF
 [Unit]
-Description=Backend-сервис Abitour
+Description=Abitour backend service
 After=network-online.target
 Wants=network-online.target
 
@@ -402,19 +380,20 @@ EOF
 }
 
 enable_service() {
-    log "включаю и запускаю сервис"
+    log "Включаю и запускаю сервис"
     run_root systemctl daemon-reload
     run_root systemctl enable --now "${APP_NAME}"
 }
 
 show_summary() {
-    log "установка завершена"
+    log "Установка завершена"
     echo
     echo "Сервис    : ${APP_NAME}"
     echo "Статус    : systemctl status ${APP_NAME}"
     echo "Логи      : journalctl -u ${APP_NAME} -f"
     echo "Конфиг    : ${ENV_FILE}"
     echo "Данные    : ${DATA_DIR}"
+    echo "Релиз     : ${RELEASE_TAG}"
     echo
 }
 
@@ -424,8 +403,7 @@ main() {
     ensure_user
     prompt_configuration
     prepare_directories
-    download_source
-    build_application
+    download_release_asset
     install_application
     ensure_env_file
     write_service_file
