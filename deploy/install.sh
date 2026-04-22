@@ -15,6 +15,9 @@ DEFAULT_PORT="8080"
 DEFAULT_DB_JDBC_URL="jdbc:sqlite:${DATA_DIR}/abitour.db"
 DEFAULT_DB_MAX_POOL_SIZE="10"
 DEFAULT_UPLOADS_DIR="${DATA_DIR}/uploads"
+JAVA_DIR="${INSTALL_DIR}/java"
+JAVA_HOME_DIR=""
+JAVA_BIN="java"
 
 ABITOUR_PORT_VALUE=""
 ABITOUR_JWT_SECRET_VALUE=""
@@ -86,21 +89,97 @@ resolve_default() {
 install_packages() {
     if command_exists apt-get; then
         run_root apt-get update
-        run_root apt-get install -y ca-certificates curl tar unzip openjdk-21-jre-headless
+        run_root apt-get install -y ca-certificates curl tar unzip
         return
     fi
 
     if command_exists dnf; then
-        run_root dnf install -y ca-certificates curl tar unzip java-21-openjdk-headless
+        run_root dnf install -y ca-certificates curl tar unzip
         return
     fi
 
     if command_exists yum; then
-        run_root yum install -y ca-certificates curl tar unzip java-21-openjdk-headless
+        run_root yum install -y ca-certificates curl tar unzip
         return
     fi
 
     fail "неподдерживаемый пакетный менеджер. Установите curl, tar, unzip и Java 21 вручную."
+}
+
+java_is_21() {
+    local java_cmd="$1"
+    local version_output
+
+    if ! version_output="$("${java_cmd}" -version 2>&1)"; then
+        return 1
+    fi
+
+    [[ "${version_output}" == *'"21.'* || "${version_output}" == *' version "21"'* ]]
+}
+
+install_java21_from_packages() {
+    if command_exists apt-get; then
+        local packages=(
+            openjdk-21-jdk-headless
+            openjdk-21-jdk
+            msopenjdk-21
+        )
+        local package
+        for package in "${packages[@]}"; do
+            if run_root apt-get install -y "${package}"; then
+                return 0
+            fi
+        done
+        return 1
+    fi
+
+    if command_exists dnf; then
+        run_root dnf install -y java-21-openjdk-devel || run_root dnf install -y java-21-openjdk-headless
+        return
+    fi
+
+    if command_exists yum; then
+        run_root yum install -y java-21-openjdk-devel || run_root yum install -y java-21-openjdk-headless
+        return
+    fi
+
+    return 1
+}
+
+install_java21_from_adoptium() {
+    local archive_url="https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse"
+
+    log "Java 21 не найдена в репозиториях, скачиваю Temurin 21"
+    curl -fsSL "${archive_url}" -o "${TMP_DIR}/java21.tar.gz"
+    run_root rm -rf "${JAVA_DIR}"
+    run_root mkdir -p "${JAVA_DIR}"
+    run_root tar -xzf "${TMP_DIR}/java21.tar.gz" -C "${JAVA_DIR}" --strip-components=1
+}
+
+ensure_java21() {
+    if command_exists java && java_is_21 "$(command -v java)"; then
+        JAVA_BIN="$(command -v java)"
+        JAVA_HOME_DIR="$(cd "$(dirname "${JAVA_BIN}")/.." && pwd)"
+        log "использую системную Java 21: ${JAVA_BIN}"
+        return
+    fi
+
+    if install_java21_from_packages; then
+        if command_exists java && java_is_21 "$(command -v java)"; then
+            JAVA_BIN="$(command -v java)"
+            JAVA_HOME_DIR="$(cd "$(dirname "${JAVA_BIN}")/.." && pwd)"
+            log "установлена Java 21 из пакетов: ${JAVA_BIN}"
+            return
+        fi
+    fi
+
+    install_java21_from_adoptium
+    JAVA_HOME_DIR="${JAVA_DIR}"
+    JAVA_BIN="${JAVA_HOME_DIR}/bin/java"
+
+    if ! java_is_21 "${JAVA_BIN}"; then
+        fail "не удалось подготовить Java 21"
+    fi
 }
 
 ensure_user() {
@@ -258,6 +337,8 @@ build_application() {
     log "собираю приложение"
     pushd "${SOURCE_DIR}" >/dev/null
     export GRADLE_USER_HOME="${TMP_DIR}/gradle-home"
+    export JAVA_HOME="${JAVA_HOME_DIR}"
+    export PATH="${JAVA_HOME}/bin:${PATH}"
     chmod +x ./gradlew
     if ! ./gradlew --no-daemon clean buildFatJar --console=plain; then
         log "задача buildFatJar недоступна, перехожу на обычную сборку"
@@ -305,7 +386,7 @@ User=${APP_USER}
 Group=${APP_GROUP}
 WorkingDirectory=${INSTALL_DIR}
 EnvironmentFile=-${ENV_FILE}
-ExecStart=/usr/bin/java -jar ${INSTALL_DIR}/${APP_NAME}.jar -port=\${ABITOUR_PORT}
+ExecStart=${JAVA_BIN} -jar ${INSTALL_DIR}/${APP_NAME}.jar -port=\${ABITOUR_PORT}
 Restart=always
 RestartSec=5
 SuccessExitStatus=143
@@ -339,6 +420,7 @@ show_summary() {
 
 main() {
     install_packages
+    ensure_java21
     ensure_user
     prompt_configuration
     prepare_directories
