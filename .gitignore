@@ -1,0 +1,14 @@
+.gradle/
+build/
+.idea/
+.kotlin/
+out/
+
+*.iml
+*.log
+.DS_Store
+
+data/*.db
+data/uploads/*
+!data/.gitkeep
+!data/uploads/.gitkeep

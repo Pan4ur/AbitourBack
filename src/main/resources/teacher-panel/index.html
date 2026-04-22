@@ -1,0 +1,251 @@
+﻿<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ABITOUR Teacher Panel</title>
+  <link rel="stylesheet" href="/teacher-panel/styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <h1>Панель преподавателя</h1>
+        <p class="muted">Контроль прохождения, подсказки и создание квестов</p>
+      </div>
+      <div class="topbar-actions">
+        <button id="btnTheme" class="btn btn-ghost">Тёмная тема</button>
+        <button id="btnRefresh" class="btn">Обновить</button>
+        <button id="btnLogout" class="btn btn-ghost">Выйти</button>
+      </div>
+    </header>
+
+    <section id="authCard" class="card">
+      <h2>Вход / Регистрация</h2>
+      <div class="grid two">
+        <label class="field">
+          <span>Имя</span>
+          <input id="authName" type="text" placeholder="Имя преподавателя">
+        </label>
+        <label class="field">
+          <span>Пароль</span>
+          <input id="authPassword" type="password" placeholder="Минимум 6 символов">
+        </label>
+      </div>
+      <div class="actions">
+        <button id="btnLogin" class="btn btn-primary">Войти как преподаватель</button>
+        <button id="btnRegister" class="btn">Зарегистрироваться как преподаватель</button>
+        <span id="authMessage" class="muted"></span>
+      </div>
+    </section>
+
+    <section id="dashboard" class="dashboard hidden">
+      <nav class="tabbar" aria-label="Разделы панели преподавателя">
+        <button type="button" class="tab-btn active" data-tab-target="participantsTab">Участники</button>
+        <button type="button" class="tab-btn" data-tab-target="questsTab">Квесты</button>
+      </nav>
+
+      <section id="participantsTab" class="tab-panel">
+        <section class="card">
+          <h2>Участники и прогресс</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Участник</th>
+                  <th>Квест</th>
+                  <th>Точек</th>
+                  <th>Баллы</th>
+                  <th>Попытки</th>
+                  <th>Ошибки</th>
+                  <th>Активность</th>
+                  <th>Текущая точка</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="progressTbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Карточка участника</h2>
+          <div id="participantCard" class="muted">Выберите участника в таблице.</div>
+          <hr>
+          <h3>Ответы участника</h3>
+          <div id="participantAnswers" class="muted">Ответы появятся после выбора участника.</div>
+          <hr>
+          <h3>Подсказка участнику</h3>
+          <label class="field">
+            <span>Текст подсказки</span>
+            <textarea id="hintText" rows="3" placeholder="Проверь табличку у входа в аудиторию..."></textarea>
+          </label>
+          <div class="actions">
+            <button id="btnSendHint" class="btn btn-primary" disabled>Отправить подсказку</button>
+            <span id="hintMessage" class="muted"></span>
+          </div>
+          <hr>
+          <h3>Рекомендация участнику</h3>
+          <label class="field">
+            <span>Текст рекомендации</span>
+            <textarea id="recommendationText" rows="3" placeholder="Рекомендуем обратить внимание на направление ..."></textarea>
+          </label>
+          <div class="actions">
+            <button id="btnSendRecommendation" class="btn" disabled>Отправить рекомендацию</button>
+            <span id="recommendationMessage" class="muted"></span>
+          </div>
+        </section>
+      </section>
+
+      <section id="questsTab" class="tab-panel hidden">
+        <section class="card">
+          <h2>Мои квесты</h2>
+          <div id="questsList" class="quest-list"></div>
+          <div id="selectedQuestCard" class="muted">Выберите квест из списка.</div>
+          <div class="actions">
+            <button id="btnEditQuest" class="btn btn-ghost" disabled>Редактировать квест</button>
+            <button id="btnDeleteQuest" class="btn btn-ghost" disabled>Удалить квест</button>
+            <button id="btnExportQuest" class="btn btn-ghost" disabled>Экспорт квеста</button>
+            <input id="importQuestFile" type="file" accept="application/json" class="hidden">
+            <button id="btnImportQuest" class="btn btn-ghost">Импорт квеста</button>
+          </div>
+          <section id="questEditor" class="editor hidden">
+            <h3>Редактор квеста</h3>
+            <label class="field"><span>Название</span><input id="editQuestTitle" type="text"></label>
+            <label class="field"><span>Описание</span><textarea id="editQuestDescription" rows="3"></textarea></label>
+            <label class="field"><span>Учебное заведение</span><input id="editQuestInstitution" type="text"></label>
+            <label class="field checkbox"><input id="editQuestIsActive" type="checkbox"><span>Квест активен</span></label>
+            <div class="actions">
+              <button id="btnSaveQuestEdit" class="btn btn-primary">Сохранить</button>
+              <button id="btnCancelQuestEdit" class="btn btn-ghost">Отмена</button>
+              <span id="questEditMessage" class="muted"></span>
+            </div>
+          </section>
+          <hr>
+          <h3>Преподаватели квеста</h3>
+          <div class="teacher-invite-row">
+            <label class="field"><span>Имя преподавателя</span><input id="inviteTeacherName" type="text" placeholder="Имя аккаунта преподавателя"></label>
+            <div class="actions">
+              <button id="btnInviteTeacher" class="btn" disabled>Пригласить в квест</button>
+            </div>
+          </div>
+          <div id="questTeachersList" class="teacher-list"></div>
+          <p id="teacherManageMessage" class="muted"></p>
+          <hr>
+          <h2>Создание квеста</h2>
+          <label class="field"><span>Название</span><input id="questTitle" type="text"></label>
+          <label class="field"><span>Описание</span><textarea id="questDescription" rows="3"></textarea></label>
+          <label class="field"><span>Учебное заведение</span><input id="questInstitution" type="text"></label>
+          <label class="field checkbox"><input id="questIsActive" type="checkbox" checked><span>Сразу активировать</span></label>
+          <div class="actions">
+            <button id="btnCreateQuest" class="btn btn-primary">Создать квест</button>
+            <span id="questMessage" class="muted"></span>
+          </div>
+          <hr>
+          <h3>Добавить точку</h3>
+          <label class="field"><span>Quest ID</span><input id="locationQuestId" type="text" readonly></label>
+          <label class="field"><span>Позиция</span><input id="locationPosition" type="number" min="1" value="1"></label>
+          <label class="field"><span>Название точки</span><input id="locationTitle" type="text"></label>
+          <div class="actions">
+            <button id="btnCreateLocation" class="btn">Добавить точку</button>
+            <span id="locationMessage" class="muted"></span>
+          </div>
+          <div id="pointsList" class="point-list"></div>
+          <hr>
+          <h3>Выбранная точка</h3>
+          <div id="selectedPointCard" class="muted">Выберите точку в списке выше.</div>
+          <div class="actions">
+            <button id="btnDownloadQrPrint" class="btn" disabled>Скачать лист печати QR</button>
+          </div>
+          <div id="pointTasksList" class="task-list"></div>
+          <section id="taskEditor" class="editor hidden">
+            <h3>Редактор задания</h3>
+            <input id="editTaskId" type="hidden">
+            <label class="field"><span>Название задания</span><input id="editTaskTitle" type="text"></label>
+            <label class="field"><span>Описание</span><textarea id="editTaskDescription" rows="3"></textarea></label>
+            <div class="grid two">
+              <label class="field">
+                <span>Тип</span>
+                <select id="editTaskType">
+                  <option value="QUIZ">Викторина</option>
+                  <option value="INFO">Инфо-блок</option>
+                  <option value="QUESTION">Ответ текстом</option>
+                </select>
+              </label>
+              <label class="field"><span>Макс. балл</span><input id="editTaskMaxScore" type="number" min="1" value="1"></label>
+            </div>
+            <div id="editQuizOptionsSection" class="field">
+              <span>Варианты викторины</span>
+              <div id="editQuizOptionsList" class="quiz-options-list"></div>
+              <button id="btnEditAddQuizOption" type="button" class="btn btn-add-option">+</button>
+            </div>
+            <label id="editQuestionAnswerField" class="field hidden"><span>Правильный ответ для типа "Ответ текстом"</span><input id="editTaskCorrectAnswer" type="text"></label>
+            <div class="grid two">
+              <label class="field"><span>URL вложения</span><input id="editTaskMediaUrl" type="text" placeholder="/uploads/....png"></label>
+              <label class="field">
+                <span>Тип вложения</span>
+                <select id="editTaskMediaType">
+                  <option value="">Не задан</option>
+                  <option value="IMAGE">Изображение</option>
+                  <option value="VIDEO">Видео</option>
+                </select>
+              </label>
+            </div>
+            <div class="actions">
+              <input id="editTaskMediaFile" type="file" accept="image/png,image/jpeg,image/gif,video/mp4,video/webm,video/quicktime">
+              <button id="btnEditUploadMedia" class="btn" type="button">Загрузить медиа</button>
+            </div>
+            <div class="actions">
+              <button id="btnSaveTaskEdit" class="btn btn-primary">Сохранить задание</button>
+              <button id="btnCancelTaskEdit" class="btn btn-ghost">Отмена</button>
+              <span id="taskEditMessage" class="muted"></span>
+            </div>
+          </section>
+          <hr>
+          <h3>Добавить задание в выбранную точку</h3>
+          <label class="field"><span>Название задания</span><input id="taskTitle" type="text"></label>
+          <label class="field"><span>Описание</span><textarea id="taskDescription" rows="3"></textarea></label>
+          <div class="grid two">
+            <label class="field">
+              <span>Тип</span>
+              <select id="taskType">
+                <option value="QUIZ">Викторина</option>
+                <option value="INFO">Инфо-блок</option>
+                <option value="QUESTION">Ответ текстом</option>
+              </select>
+            </label>
+            <label class="field"><span>Макс. балл</span><input id="taskMaxScore" type="number" min="1" value="1"></label>
+          </div>
+          <div id="quizOptionsSection" class="field">
+            <span>Варианты викторины</span>
+            <div id="quizOptionsList" class="quiz-options-list"></div>
+            <button id="btnAddQuizOption" type="button" class="btn btn-add-option">+</button>
+          </div>
+          <label id="questionAnswerField" class="field hidden"><span>Правильный ответ для типа "Ответ текстом"</span><input id="taskCorrectAnswer" type="text"></label>
+          <div class="grid two">
+            <label class="field"><span>URL вложения</span><input id="taskMediaUrl" type="text" placeholder="/uploads/....png"></label>
+            <label class="field">
+              <span>Тип вложения</span>
+              <select id="taskMediaType">
+                <option value="">Не задан</option>
+                <option value="IMAGE">Изображение</option>
+                <option value="VIDEO">Видео</option>
+              </select>
+            </label>
+          </div>
+          <div class="actions">
+            <input id="taskMediaFile" type="file" accept="image/png,image/jpeg,image/gif,video/mp4,video/webm,video/quicktime">
+            <button id="btnUploadMedia" class="btn">Загрузить медиа</button>
+          </div>
+          <div class="actions">
+            <button id="btnCreateTask" class="btn">Добавить задание</button>
+            <span id="taskMessage" class="muted"></span>
+          </div>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <script src="/teacher-panel/app.js"></script>
+</body>
+</html>

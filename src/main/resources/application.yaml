@@ -1,0 +1,19 @@
+ktor:
+  deployment:
+    port: 8080
+  application:
+    modules:
+      - dev.pan4ur.abitour.server.ApplicationKt.module
+
+abitour:
+  jwt:
+    issuer: "abitour-server"
+    audience: "abitour-client"
+    realm: "Abitour API"
+    secret: "change-me-in-env"
+    accessTokenTtlMinutes: 120
+  db:
+    jdbcUrl: "jdbc:sqlite:./data/abitour.db"
+    user: ""
+    password: ""
+    maxPoolSize: 10
