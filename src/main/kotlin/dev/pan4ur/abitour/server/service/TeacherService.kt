@@ -22,37 +22,42 @@ class TeacherService(
     private val repository: BackendRepository
 ) {
     fun progressFeed(teacherId: String): List<TeacherProgressDto> {
-        val questId = repository.teacherQuests(teacherId).firstOrNull()?.questId ?: return emptyList()
-        val questLocations = repository.questLocations(questId).sortedBy { it.position }
-        val totalLocations = repository.totalLocations(questId)
-        return repository.listUsers()
-            .filter { it.role == UserRole.APPLICANT }
-            .map { user ->
-                val completedLocationIds = repository.scannedLocations(user.id, questId).toSet()
-                val completed = completedLocationIds.size
-                val score = repository.score(user.id, questId)
-                val stats = repository.participantStats(user.id, questId)
-                val currentLocationTitle = resolveCurrentLocationTitle(questLocations, completedLocationIds)
-                TeacherProgressDto(
-                    participantId = user.id,
-                    participantName = user.name,
-                    questId = questId,
-                    currentLocationTitle = currentLocationTitle,
-                    score = score,
-                    completedLocations = completed,
-                    totalLocations = totalLocations,
-                    attemptsCount = stats.attemptsCount,
-                    wrongAnswersCount = stats.wrongAnswersCount,
-                    lastActivityAt = stats.lastActivityAt
-                )
+        return repository.teacherQuests(teacherId)
+            .flatMap { quest ->
+                val questLocations = repository.questLocations(quest.questId).sortedBy { it.position }
+                val totalLocations = repository.totalLocations(quest.questId)
+                repository.participantsByQuest(quest.questId).map { user ->
+                    val completedLocationIds = repository.scannedLocations(user.id, quest.questId).toSet()
+                    val completed = completedLocationIds.size
+                    val score = repository.score(user.id, quest.questId)
+                    val stats = repository.participantStats(user.id, quest.questId)
+                    val currentLocationTitle = resolveCurrentLocationTitle(questLocations, completedLocationIds)
+                    TeacherProgressDto(
+                        participantId = user.id,
+                        participantName = user.name,
+                        questId = quest.questId,
+                        currentLocationTitle = currentLocationTitle,
+                        score = score,
+                        completedLocations = completed,
+                        totalLocations = totalLocations,
+                        attemptsCount = stats.attemptsCount,
+                        wrongAnswersCount = stats.wrongAnswersCount,
+                        lastActivityAt = stats.lastActivityAt
+                    )
+                }
             }
     }
 
-    fun sendHint(teacherId: String, participantId: String, hint: String): HintDto {
-        val questId = repository.teacherQuests(teacherId).firstOrNull()?.questId
-            ?: throw ApiException(HttpStatusCode.BadRequest, "QUEST_NOT_SELECTED", "Teacher has no quests")
-        repository.saveHint(teacherId, participantId, questId, hint, "HINT")
-        return HintDto(participantId = participantId, hint = hint)
+    fun sendHint(teacherId: String, participantId: String, questId: String, hint: String): HintDto {
+        if (questId.isBlank()) {
+            throw ApiException(HttpStatusCode.BadRequest, "INVALID_QUEST", "Quest id is required")
+        }
+        if (hint.isBlank()) {
+            throw ApiException(HttpStatusCode.BadRequest, "INVALID_HINT", "Hint is required")
+        }
+        requireParticipantQuestAccess(teacherId, participantId, questId)
+        repository.saveHint(teacherId, participantId, questId, hint.trim(), "HINT")
+        return HintDto(participantId = participantId, hint = hint.trim())
     }
 
     fun sendRecommendation(teacherId: String, participantId: String, questId: String, recommendation: String): HintDto {
@@ -62,7 +67,7 @@ class TeacherService(
         if (recommendation.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "INVALID_RECOMMENDATION", "Recommendation is required")
         }
-        requireQuestAccess(teacherId, questId)
+        requireParticipantQuestAccess(teacherId, participantId, questId)
         repository.saveHint(
             teacherId = teacherId,
             participantId = participantId,
@@ -73,15 +78,11 @@ class TeacherService(
         return HintDto(participantId = participantId, hint = recommendation.trim())
     }
 
-    fun participantDetails(participantId: String, questId: String): TeacherParticipantDetailsDto {
+    fun participantDetails(teacherId: String, participantId: String, questId: String): TeacherParticipantDetailsDto {
         if (questId.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "INVALID_QUEST", "Quest id is required")
         }
-        val user = repository.findUser(participantId)
-            ?: throw ApiException(HttpStatusCode.NotFound, "PARTICIPANT_NOT_FOUND", "Participant not found")
-        if (user.role != UserRole.APPLICANT) {
-            throw ApiException(HttpStatusCode.BadRequest, "NOT_APPLICANT", "User is not an applicant")
-        }
+        val user = requireParticipantQuestAccess(teacherId, participantId, questId)
         val completedLocationIds = repository.scannedLocations(participantId, questId).toList()
         val questLocations = repository.questLocations(questId).sortedBy { it.position }
         val totalLocations = repository.totalLocations(questId)
@@ -105,12 +106,7 @@ class TeacherService(
         if (questId.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "INVALID_QUEST", "Quest id is required")
         }
-        requireQuestAccess(teacherId, questId)
-        val user = repository.findUser(participantId)
-            ?: throw ApiException(HttpStatusCode.NotFound, "PARTICIPANT_NOT_FOUND", "Participant not found")
-        if (user.role != UserRole.APPLICANT) {
-            throw ApiException(HttpStatusCode.BadRequest, "NOT_APPLICANT", "User is not an applicant")
-        }
+        requireParticipantQuestAccess(teacherId, participantId, questId)
         return repository.participantAnswers(participantId, questId).map {
             TeacherParticipantAnswerDto(
                 taskId = it.taskId,
@@ -385,6 +381,19 @@ class TeacherService(
         if (!repository.isQuestOwner(teacherId, questId)) {
             throw ApiException(HttpStatusCode.Forbidden, "QUEST_OWNER_REQUIRED", "Only quest owner can perform this action")
         }
+    }
+
+    private fun requireParticipantQuestAccess(teacherId: String, participantId: String, questId: String) : dev.pan4ur.abitour.server.model.User {
+        requireQuestAccess(teacherId, questId)
+        val user = repository.findUser(participantId)
+            ?: throw ApiException(HttpStatusCode.NotFound, "PARTICIPANT_NOT_FOUND", "Participant not found")
+        if (user.role != UserRole.APPLICANT) {
+            throw ApiException(HttpStatusCode.BadRequest, "NOT_APPLICANT", "User is not an applicant")
+        }
+        if (!repository.hasParticipantProgress(participantId, questId)) {
+            throw ApiException(HttpStatusCode.NotFound, "PARTICIPANT_NOT_IN_QUEST", "Participant is not assigned to this quest")
+        }
+        return user
     }
 
     private fun normalizeTaskType(raw: String): String {

@@ -103,6 +103,15 @@ textarea { resize: vertical; }
   cursor: not-allowed;
 }
 .table-wrap { overflow-x: auto; }
+.participants-table-wrap {
+  max-height: 480px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.participant-search-field {
+  margin-bottom: 12px;
+}
 table {
   width: 100%;
   border-collapse: collapse;
@@ -113,6 +122,12 @@ th, td {
   border-bottom: 1px solid var(--line);
   text-align: left;
   white-space: nowrap;
+}
+thead th {
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  z-index: 1;
 }
 th { color: #334155; font-weight: 600; }
 .badge {

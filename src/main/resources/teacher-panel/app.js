@@ -5,6 +5,7 @@
   let selectedParticipantQuestId = null;
   let selectedQuestId = null;
   let selectedLocation = null;
+  let cachedParticipantProgress = [];
   let cachedTeacherQuests = [];
   let cachedQuestTeachers = [];
   let cachedLocations = [];
@@ -23,6 +24,7 @@
   const authCard = el("authCard");
   const dashboard = el("dashboard");
   const tbody = el("progressTbody");
+  const participantSearch = el("participantSearch");
   const participantCard = el("participantCard");
   const participantAnswers = el("participantAnswers");
   const pointsList = el("pointsList");
@@ -997,34 +999,64 @@
   async function refreshProgress() {
     try {
       const list = await api("/teacher/progress");
-      tbody.innerHTML = "";
-      list.forEach((row) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${escapeHtml(row.participantName)}</td>
-          <td>${escapeHtml(row.questId)}</td>
-          <td>${renderProgressBar(row.completedLocations, row.totalLocations, true)}</td>
-          <td>${row.score}</td>
-          <td>${row.attemptsCount}</td>
-          <td>${row.wrongAnswersCount}</td>
-          <td>${formatAgo(row.lastActivityAt)}</td>
-          <td>${escapeHtml(currentLocationLabel(row.currentLocationTitle))}</td>
-          <td><button class="btn btn-ghost" data-user="${escapeHtml(row.participantId)}" data-quest="${escapeHtml(row.questId)}">Открыть</button></td>
-        `;
-        tbody.appendChild(tr);
-      });
-      tbody.querySelectorAll("button[data-user]").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          selectedParticipantId = btn.getAttribute("data-user");
-          selectedParticipantQuestId = btn.getAttribute("data-quest");
-          el("btnSendHint").disabled = false;
-          el("btnSendRecommendation").disabled = false;
-          await loadParticipantDetails();
-        });
-      });
+      cachedParticipantProgress = Array.isArray(list) ? list : [];
+      renderProgressRows();
     } catch (e) {
+      cachedParticipantProgress = [];
       tbody.innerHTML = `<tr><td colspan="9">${escapeHtml(e.message)}</td></tr>`;
     }
+  }
+
+  function filteredParticipantProgress() {
+    const query = (participantSearch.value || "").trim().toLowerCase();
+    if (!query) return cachedParticipantProgress;
+    return cachedParticipantProgress.filter((row) => {
+      const haystack = [
+        row.participantName,
+        row.questId,
+        row.currentLocationTitle
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+
+  function renderProgressRows() {
+    tbody.innerHTML = "";
+    const rows = filteredParticipantProgress();
+    if (!rows.length) {
+      const message = cachedParticipantProgress.length
+        ? "По вашему запросу участники не найдены."
+        : "Для ваших квестов пока нет участников.";
+      tbody.innerHTML = `<tr><td colspan="9">${escapeHtml(message)}</td></tr>`;
+      return;
+    }
+    rows.forEach((row) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(row.participantName)}</td>
+        <td>${escapeHtml(row.questId)}</td>
+        <td>${renderProgressBar(row.completedLocations, row.totalLocations, true)}</td>
+        <td>${row.score}</td>
+        <td>${row.attemptsCount}</td>
+        <td>${row.wrongAnswersCount}</td>
+        <td>${formatAgo(row.lastActivityAt)}</td>
+        <td>${escapeHtml(currentLocationLabel(row.currentLocationTitle))}</td>
+        <td><button class="btn btn-ghost" data-user="${escapeHtml(row.participantId)}" data-quest="${escapeHtml(row.questId)}">Открыть</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll("button[data-user]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        selectedParticipantId = btn.getAttribute("data-user");
+        selectedParticipantQuestId = btn.getAttribute("data-quest");
+        el("btnSendHint").disabled = false;
+        el("btnSendRecommendation").disabled = false;
+        await loadParticipantDetails();
+      });
+    });
   }
 
   async function loadParticipantDetails() {
@@ -1093,7 +1125,11 @@
       }
       await api("/teacher/hint", {
         method: "POST",
-        body: JSON.stringify({ participantId: selectedParticipantId, hint })
+        body: JSON.stringify({
+          participantId: selectedParticipantId,
+          questId: selectedParticipantQuestId,
+          hint
+        })
       });
       hintMessage.textContent = "Подсказка отправлена.";
       el("hintText").value = "";
@@ -1413,6 +1449,7 @@
     refreshProgress();
     loadTeacherQuests();
   });
+  participantSearch.addEventListener("input", renderProgressRows);
   el("btnEditQuest").addEventListener("click", editSelectedQuest);
   el("btnSaveQuestEdit").addEventListener("click", saveQuestEdit);
   el("btnCancelQuestEdit").addEventListener("click", closeQuestEditor);

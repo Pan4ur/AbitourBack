@@ -58,7 +58,7 @@ fun Route.teacherRoutes(teacherService: TeacherService) {
             requireRole(call, UserRole.TEACHER)
             val teacherId = requireUserId(call)
             val payload = call.receive<HintRequest>()
-            call.respond(teacherService.sendHint(teacherId, payload.participantId, payload.hint))
+            call.respond(teacherService.sendHint(teacherId, payload.participantId, payload.questId, payload.hint))
         }
 
         post("/recommendation") {
@@ -103,9 +103,10 @@ fun Route.teacherRoutes(teacherService: TeacherService) {
 
         get("/participants/{participantId}") {
             requireRole(call, UserRole.TEACHER)
+            val teacherId = requireUserId(call)
             val participantId = call.parameters["participantId"].orEmpty()
             val questId = call.request.queryParameters["questId"].orEmpty()
-            call.respond(teacherService.participantDetails(participantId, questId))
+            call.respond(teacherService.participantDetails(teacherId, participantId, questId))
         }
 
         get("/participants/{participantId}/answers") {

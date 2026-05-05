@@ -99,6 +99,7 @@ data class TeacherProgressDto(
 @Serializable
 data class HintRequest(
     val participantId: String,
+    val questId: String,
     val hint: String
 )
 

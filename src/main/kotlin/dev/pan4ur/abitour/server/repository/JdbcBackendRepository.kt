@@ -120,6 +120,53 @@ class JdbcBackendRepository(
         }
     }
 
+    override fun participantsByQuest(questId: String): List<User> {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT u.id, u.name, u.role
+                FROM progress p
+                JOIN users u ON u.id = p.user_id
+                WHERE p.quest_id = ? AND u.role = 'APPLICANT'
+                ORDER BY lower(u.name), u.id
+                """.trimIndent()
+            ).use { stmt ->
+                stmt.setString(1, questId)
+                stmt.executeQuery().use { rs ->
+                    val result = mutableListOf<User>()
+                    while (rs.next()) {
+                        result += User(
+                            id = rs.getObject("id").toString(),
+                            name = rs.getString("name"),
+                            role = UserRole.valueOf(rs.getString("role"))
+                        )
+                    }
+                    return result
+                }
+            }
+        }
+    }
+
+    override fun hasParticipantProgress(userId: String, questId: String): Boolean {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT 1
+                FROM progress p
+                JOIN users u ON u.id = p.user_id
+                WHERE p.user_id = ? AND p.quest_id = ? AND u.role = 'APPLICANT'
+                LIMIT 1
+                """.trimIndent()
+            ).use { stmt ->
+                stmt.setString(1, userId)
+                stmt.setString(2, questId)
+                stmt.executeQuery().use { rs ->
+                    return rs.next()
+                }
+            }
+        }
+    }
+
     override fun activeQuests(): List<Quest> {
         dataSource.connection.use { connection ->
             connection.prepareStatement(

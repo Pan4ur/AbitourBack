@@ -88,6 +88,8 @@ interface BackendRepository {
     fun findUserRole(userId: String): UserRole?
     fun findUserName(userId: String): String?
     fun listUsers(): List<User>
+    fun participantsByQuest(questId: String): List<User>
+    fun hasParticipantProgress(userId: String, questId: String): Boolean
 
     fun activeQuests(): List<Quest>
     fun tasksByQuest(questId: String): List<Task>
