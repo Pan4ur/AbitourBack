@@ -9,9 +9,15 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.httpMethod
+import io.ktor.server.request.path
 import io.ktor.server.response.respond
 import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
+
+private val statusPagesLogger = LoggerFactory.getLogger("dev.pan4ur.abitour.server.http.StatusPages")
 
 fun Application.configureSerialization() {
     install(ContentNegotiation) {
@@ -27,13 +33,25 @@ fun Application.configureSerialization() {
 
 fun Application.configureStatusPages() {
     install(StatusPages) {
+        exception<BadRequestException> { call, _ ->
+            call.respond(
+                status = HttpStatusCode.BadRequest,
+                message = ApiError(code = "INVALID_REQUEST", message = "Invalid request body")
+            )
+        }
         exception<ApiException> { call, cause ->
             call.respond(
                 status = cause.status,
                 message = ApiError(code = cause.code, message = cause.message)
             )
         }
-        exception<Throwable> { call, _ ->
+        exception<Throwable> { call, cause ->
+            statusPagesLogger.error(
+                "Unhandled exception while processing {} {}",
+                call.request.httpMethod.value,
+                call.request.path(),
+                cause
+            )
             call.respond(
                 status = HttpStatusCode.InternalServerError,
                 message = ApiError(code = "INTERNAL_ERROR", message = "Unexpected server error")
